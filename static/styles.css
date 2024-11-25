@@ -1,0 +1,243 @@
+/* Reset and basic styles */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background: black;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+}
+
+/* CSS Variables with enhanced color scheme */
+:root {
+    --bg-color: #262626;
+    --text-color: #fff;
+    --highlight-color: #00aaff;
+    --button-bg: #0004ff;
+    --button-hover-bg: #022898;
+    --valid-color: #28a745;
+    --invalid-color: #dc3545;
+    --input-bg: #333;
+    --input-text: #fff;
+    --shadow-color: rgba(0, 170, 255, 0.2);
+}
+
+/* Header container with improved shadow */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 15px 30px;
+    background-color: var(--bg-color);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(10px);
+}
+
+/* Enhanced logo container */
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.logo-text h1 {
+    font-size: 1.6rem;
+    font-weight: bold;
+    color: var(--text-color);
+    margin-left: 20%;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Improved navigation menu */
+.nav {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 25px;
+    flex: 1;
+}
+
+.nav a {
+    color: var(--text-color);
+    text-decoration: none;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+
+.nav a:hover {
+    color: var(--highlight-color);
+    background: rgba(0, 170, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+/* Enhanced container with smooth animations */
+.container {
+    margin: 80px auto;
+    position: relative;
+    text-align: center;
+    background: rgb(22, 22, 22);
+    border-radius: 20px;
+    padding: 40px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    max-width: 600px;
+    width: 90%;
+    z-index: 0;
+    overflow: hidden;
+    transition: transform 0.3s ease;
+}
+.container h1, .container p{
+    color: var(--text-color);
+}
+.container:hover {
+    transform: translateY(-5px);
+}
+
+/* Improved glow effect */
+.container.glow::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 20px;
+    padding: 3px;
+    background: linear-gradient(
+        45deg,
+        yellow,
+        orange,
+        cyan,
+        purple,
+        pink,
+        magenta,
+        red,
+        skyblue
+    );
+    background-size: 400%;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    z-index: -1;
+    animation: animate 15s linear infinite;
+    opacity: 0.8;
+}
+
+/* Enhanced input styles */
+.input-container {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 30px 0;
+}
+.visually-hidden{
+    color: var(--button-bg);
+    margin-top: 3%;
+}
+.url-input {
+    padding: 15px;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    flex-grow: 1;
+    max-width: 350px;
+    transition: all 0.3s ease;
+    background: var(--input-bg);
+    color: var(--input-text);
+    font-size: 16px;
+}
+
+.url-input:focus {
+    outline: none;
+    border-color: var(--highlight-color);
+    box-shadow: 0 0 15px var(--shadow-color);
+}
+
+/* Improved button styles */
+.download-button {
+    background: var(--button-bg);
+    color: var(--text-color);
+    border: none;
+    padding: 15px 30px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.download-button:hover {
+    background: var(--button-hover-bg);
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(0, 4, 255, 0.3);
+}
+
+/* Enhanced footer */
+.footer {
+    margin-top: 40px;
+    font-size: 14px;
+    color: #888;
+    text-align: center;
+    padding: 20px;
+}
+
+.buy-coffee,
+.contact-link {
+    color: var(--highlight-color);
+    text-decoration: none;
+    transition: all 0.3s ease;
+    padding: 5px 10px;
+    border-radius: 4px;
+}
+
+.buy-coffee:hover,
+.contact-link:hover {
+    background: rgba(0, 170, 255, 0.1);
+    text-decoration: none;
+    color: var(--text-color);
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+        padding: 15px;
+    }
+
+    .nav {
+        margin-top: 15px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .container {
+        padding: 30px 20px;
+        margin: 40px auto;
+    }
+
+    .input-container {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .url-input {
+        max-width: 100%;
+    }
+
+    .download-button {
+        width: 100%;
+    }
+}
+
+/* Animation keyframes */
+@keyframes animate {
+    0% { background-position: 0 0; }
+    50% { background-position: 400% 0; }
+    100% { background-position: 0 0; }
+} 
