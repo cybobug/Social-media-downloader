@@ -14,9 +14,12 @@ app = Flask(__name__)
 DOWNLOAD_DIR = os.path.join(os.getcwd(), "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
+# Path to your exported cookies.txt file
+COOKIES_FILE = os.path.join(os.getcwd(), "cookies.txt")  # Replace with actual path if different
+
 def download_video(url):
     """
-    Download video from any supported platform using yt_dlp without requiring login or cookies.
+    Download video from any supported platform using yt_dlp
     """
     try:
         # Generate a unique filename for the downloaded video
@@ -28,18 +31,15 @@ def download_video(url):
             "outtmpl": filename_template,
             "format": "bestvideo+bestaudio/best",  # Best video and audio quality
             "merge_output_format": "mp4",  # Ensure output is in MP4 format
-            "quiet": False,  # Enables verbose output in logs
-            "nocheckcertificate": True,  # Bypass SSL certificate checks
-            "ignoreerrors": True,  # Skip errors and continue processing
-            "geo_bypass": True,  # Attempt to bypass geographic restrictions
-            "geo_bypass_country": "US",  # Force region to the US
+            "quiet": False,  # Show detailed output in logs
+            "cookiefile": COOKIES_FILE if os.path.exists(COOKIES_FILE) else None,
         }
 
         # Use yt_dlp to download the video
         with YoutubeDL(ydl_opts) as ydl:
             logger.info(f"Downloading video from URL: {url}")
             info = ydl.extract_info(url, download=True)  # Download and extract video info
-            downloaded_file = ydl.prepare_filename(info)  # Get downloaded filename
+            downloaded_file = ydl.prepare_filename(info).replace(".webm", ".mp4")  # Adjust filename if merged
 
         return {
             "title": info.get("title", "Unknown Title"),
@@ -96,10 +96,12 @@ def download_file(filename):
     """
     try:
         filepath = os.path.join(DOWNLOAD_DIR, filename)
+        if not os.path.exists(filepath):
+            raise FileNotFoundError("The requested file does not exist.")
         return send_file(filepath, as_attachment=True)
     except Exception as e:
         logger.error(f"File download error: {e}")
-        return jsonify({"status": "error", "message": "File not found"}), 404
+        return jsonify({"status": "error", "message": str(e)}), 404
 
 if __name__ == "__main__":
     # Run the Flask app
