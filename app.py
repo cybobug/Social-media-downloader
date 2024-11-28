@@ -1,7 +1,7 @@
 import os
 import uuid
 import logging
-from flask import Flask, request, render_template, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, abort
 from yt_dlp import YoutubeDL
 
 # Configure logging
@@ -10,44 +10,45 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Directory to store downloaded videos
+# Directory to store temporary downloads
 DOWNLOAD_DIR = os.path.join(os.getcwd(), "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# Path to your exported cookies.txt file
-COOKIES_FILE = os.path.join(os.getcwd(), "cookies.txt")  # Replace with actual path if different
+# Path to cookies.txt file (if needed for authentication)
+COOKIES_FILE = os.path.join(os.getcwd(), "cookies.txt")
 
 def download_video(url):
     """
-    Download video from any supported platform using yt_dlp
+    Downloads a video from the given URL using yt_dlp and saves it locally.
     """
     try:
-        # Generate a unique filename for the downloaded video
+        # Generate a unique filename
         unique_id = str(uuid.uuid4())
         filename_template = os.path.join(DOWNLOAD_DIR, f"{unique_id}.%(ext)s")
 
-        # Configure yt_dlp options
+        # yt_dlp options
         ydl_opts = {
             "outtmpl": filename_template,
-            "format": "bestvideo+bestaudio/best",  # Best video and audio quality
-            "merge_output_format": "mp4",  # Ensure output is in MP4 format
-            "quiet": False,  # Show detailed output in logs
+            "format": "bestvideo+bestaudio/best",  # Best quality video and audio
+            "merge_output_format": "mp4",
             "cookiefile": COOKIES_FILE if os.path.exists(COOKIES_FILE) else None,
+            "quiet": True,
         }
 
-        # Use yt_dlp to download the video
+        # Download the video
         with YoutubeDL(ydl_opts) as ydl:
             logger.info(f"Downloading video from URL: {url}")
-            info = ydl.extract_info(url, download=True)  # Download and extract video info
-            downloaded_file = ydl.prepare_filename(info).replace(".webm", ".mp4")  # Adjust filename if merged
+            info = ydl.extract_info(url, download=True)
+            downloaded_file = ydl.prepare_filename(info).replace(".webm", ".mp4")
+
+        # Ensure the file exists
+        if not os.path.exists(downloaded_file):
+            raise FileNotFoundError("The video file was not downloaded successfully.")
 
         return {
             "title": info.get("title", "Unknown Title"),
             "filepath": downloaded_file,
-            "duration": info.get("duration", "Unknown Duration"),
-            "thumbnail": info.get("thumbnail", ""),
         }
-
     except Exception as e:
         logger.error(f"Error downloading video: {e}")
         raise ValueError("Video download failed. Please check the URL or try again later.")
@@ -55,58 +56,35 @@ def download_video(url):
 @app.route("/", methods=["GET", "POST"])
 def index():
     """
-    Main route for video download
+    Main route for handling video download requests.
     """
     if request.method == "POST":
         try:
-            # Get the video URL from the request
+            # Retrieve the video URL from the form
             video_url = request.form.get("media-url")
-
-            # Validate the URL (basic check)
             if not video_url:
-                raise ValueError("No URL provided")
+                abort(400, description="No URL provided.")
 
-            # Attempt to download the video
+            # Download the video
             video_info = download_video(video_url)
 
-            # Prepare a JSON response
-            return jsonify({
-                "status": "success",
-                "title": video_info["title"],
-                "filepath": os.path.basename(video_info["filepath"]),
-            }), 200
-
+            # Return the file as a response
+            filepath = video_info["filepath"]
+            if os.path.exists(filepath):
+                return send_file(filepath, as_attachment=True, download_name=os.path.basename(filepath))
+            else:
+                abort(404, description="Downloaded file not found.")
         except ValueError as ve:
-            # Handle validation errors
-            logger.warning(f"Validation Error: {ve}")
-            return jsonify({"status": "error", "message": str(ve)}), 400
-
+            logger.warning(f"Validation error: {ve}")
+            abort(400, description=str(ve))
         except Exception as e:
-            # Handle other download errors
-            logger.error(f"Unexpected Error: {e}")
-            return jsonify({"status": "error", "message": "Video download failed"}), 500
-
-    # For GET requests, render the HTML form
+            logger.error(f"Unexpected error: {e}")
+            abort(500, description="Internal server error.")
     return render_template("index.html")
 
-@app.route("/download/<path:filename>")
-def download_file(filename):
-    """
-    Serve the downloaded file
-    """
-    try:
-        filepath = os.path.join(DOWNLOAD_DIR, filename)
-        if not os.path.exists(filepath):
-            raise FileNotFoundError("The requested file does not exist.")
-        return send_file(filepath, as_attachment=True)
-    except Exception as e:
-        logger.error(f"File download error: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 404
-
 if __name__ == "__main__":
-    # Run the Flask app
     app.run(
         host="0.0.0.0",
         port=int(os.environ.get("PORT", 5000)),
-        debug=False
+        debug=False,
     )
