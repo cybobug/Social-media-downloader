@@ -28,13 +28,12 @@ def index():
         video_url = request.form.get("media-url")
         if not video_url:
             return jsonify({"error": "No URL provided"}), 400
-        
+       
         video_title, folder = download_video(video_url)
         if folder:
             return jsonify({"message": f"Download successful. File saved as {video_title}."}), 200
         else:
             return jsonify({"error": "Download failed"}), 500
-
     return render_template("index.html")
 
 @app.route("/downloaded/<path:filename>")
