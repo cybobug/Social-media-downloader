@@ -14,12 +14,9 @@ app = Flask(__name__)
 DOWNLOAD_DIR = os.path.join(os.getcwd(), "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# Path to cookies file (optional)
-COOKIES_FILE = os.path.join(os.getcwd(), "cookies.txt")  # Update this path if cookies file is available
-
 def download_video(url):
     """
-    Download video from any supported platform using yt_dlp
+    Download video from any supported platform using yt_dlp without requiring login or cookies.
     """
     try:
         # Generate a unique filename for the downloaded video
@@ -31,17 +28,12 @@ def download_video(url):
             "outtmpl": filename_template,
             "format": "bestvideo+bestaudio/best",  # Best video and audio quality
             "merge_output_format": "mp4",  # Ensure output is in MP4 format
-            "quiet": False,  # Show detailed output in logs
+            "quiet": False,  # Enables verbose output in logs
+            "nocheckcertificate": True,  # Bypass SSL certificate checks
+            "ignoreerrors": True,  # Skip errors and continue processing
+            "geo_bypass": True,  # Attempt to bypass geographic restrictions
+            "geo_bypass_country": "US",  # Force region to the US
         }
-
-        # Add cookies support if the cookies file exists
-        if os.path.exists(COOKIES_FILE):
-            ydl_opts["cookiefile"] = COOKIES_FILE
-            logger.info("Using cookies from file: cookies.txt")
-        else:
-            # Uncomment below line for browser-based cookies handling
-            # ydl_opts["cookiesfrombrowser"] = "chrome"
-            logger.warning("Cookies file not found. Some downloads may fail.")
 
         # Use yt_dlp to download the video
         with YoutubeDL(ydl_opts) as ydl:
@@ -81,7 +73,7 @@ def index():
             return jsonify({
                 "status": "success",
                 "title": video_info["title"],
-                "filepath": video_info["filepath"],
+                "filepath": os.path.basename(video_info["filepath"]),
             }), 200
 
         except ValueError as ve:
