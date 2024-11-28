@@ -1,103 +1,64 @@
 import os
 import uuid
-import requests
-from flask import Flask, request, render_template, send_file, jsonify
-from yt_dlp import YoutubeDL
 import logging
-from flask_cors import CORS
-from werkzeug.middleware.proxy_fix import ProxyFix
+from flask import Flask, request, render_template, jsonify, send_file
+from yt_dlp import YoutubeDL
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-# Sophisticated headers to mimic browser requests
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Referer': 'https://www.google.com/',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'cross-site',
-    'Sec-Fetch-User': '?1',
-    'Upgrade-Insecure-Requests': '1',
-    'Cache-Control': 'max-age=0',
-}
+# Directory to store downloaded videos
+DOWNLOAD_DIR = os.path.join(os.getcwd(), "downloads")
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-def validate_url(url):
-    """
-    Validate and sanitize the input URL
-    """
-    if not url:
-        raise ValueError("No URL provided")
-    
-    # Basic URL validation
-    if not (url.startswith('http://') or url.startswith('https://')):
-        raise ValueError("Invalid URL format")
-    
-    return url
+# Path to cookies file (optional)
+COOKIES_FILE = os.path.join(os.getcwd(), "cookies.txt")  # Update this path if cookies file is available
 
 def download_video(url):
     """
-    Download video with enhanced error handling and unique filename
+    Download video from any supported platform using yt_dlp
     """
-    # Ensure unique filename to prevent conflicts
-    unique_id = str(uuid.uuid4())
-    
-    # Advanced yt-dlp options
-    ydl_opts = {
-        'outtmpl': f'/tmp/{unique_id}_%(title)s.%(ext)s',
-        'format': 'bestvideo+bestaudio/best',
-        'noplaylist': True,
-        'no_color': True,
-        'no_warnings': True,
-        'ignoreerrors': False,
-        'no_progress': True,
-        'throttledbytes': 1024 * 1024,  # 1 MB throttling
-        'retries': 3,
-        'fragment_retries': 3,
-        'http_headers': HEADERS,
-        'progress_hooks': [lambda d: print_progress(d)],
-    }
-    
     try:
-        with YoutubeDL(ydl_opts) as ydl:
-            # Extract video information
-            info_dict = ydl.extract_info(url, download=True)
-            
-            # Find the downloaded file
-            for filename in os.listdir('/tmp'):
-                if unique_id in filename:
-                    full_path = os.path.join('/tmp', filename)
-                    
-                    # Log successful download
-                    logger.info(f"Successfully downloaded: {info_dict.get('title', 'Unknown')}")
-                    
-                    return {
-                        'title': info_dict.get('title', 'Unknown'),
-                        'filepath': full_path,
-                        'duration': info_dict.get('duration', 0),
-                        'ext': info_dict.get('ext', 'mp4')
-                    }
-        
-        raise Exception("No file found after download")
-    
-    except Exception as e:
-        logger.error(f"Download failed: {str(e)}")
-        raise
+        # Generate a unique filename for the downloaded video
+        unique_id = str(uuid.uuid4())
+        filename_template = os.path.join(DOWNLOAD_DIR, f"{unique_id}.%(ext)s")
 
-def print_progress(d):
-    """
-    Optional progress tracking
-    """
-    if d['status'] == 'finished':
-        print('Video downloaded successfully.')
+        # Configure yt_dlp options
+        ydl_opts = {
+            "outtmpl": filename_template,
+            "format": "bestvideo+bestaudio/best",  # Best video and audio quality
+            "merge_output_format": "mp4",  # Ensure output is in MP4 format
+            "quiet": False,  # Show detailed output in logs
+        }
+
+        # Add cookies support if the cookies file exists
+        if os.path.exists(COOKIES_FILE):
+            ydl_opts["cookiefile"] = COOKIES_FILE
+            logger.info("Using cookies from file: cookies.txt")
+        else:
+            # Uncomment below line for browser-based cookies handling
+            # ydl_opts["cookiesfrombrowser"] = "chrome"
+            logger.warning("Cookies file not found. Some downloads may fail.")
+
+        # Use yt_dlp to download the video
+        with YoutubeDL(ydl_opts) as ydl:
+            logger.info(f"Downloading video from URL: {url}")
+            info = ydl.extract_info(url, download=True)  # Download and extract video info
+            downloaded_file = ydl.prepare_filename(info)  # Get downloaded filename
+
+        return {
+            "title": info.get("title", "Unknown Title"),
+            "filepath": downloaded_file,
+            "duration": info.get("duration", "Unknown Duration"),
+            "thumbnail": info.get("thumbnail", ""),
+        }
+
+    except Exception as e:
+        logger.error(f"Error downloading video: {e}")
+        raise ValueError("Video download failed. Please check the URL or try again later.")
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -106,34 +67,34 @@ def index():
     """
     if request.method == "POST":
         try:
-            # Get URL from request
+            # Get the video URL from the request
             video_url = request.form.get("media-url")
-            
-            # Validate URL
-            validated_url = validate_url(video_url)
-            
-            # Attempt download
-            video_info = download_video(validated_url)
-            
-            # Prepare response
+
+            # Validate the URL (basic check)
+            if not video_url:
+                raise ValueError("No URL provided")
+
+            # Attempt to download the video
+            video_info = download_video(video_url)
+
+            # Prepare a JSON response
             return jsonify({
                 "status": "success",
-                "title": video_info['title'],
-                "duration": video_info['duration'],
-                "filepath": video_info['filepath']
+                "title": video_info["title"],
+                "filepath": video_info["filepath"],
             }), 200
-        
+
         except ValueError as ve:
-            # Handle URL validation errors
-            logger.warning(f"URL Validation Error: {str(ve)}")
+            # Handle validation errors
+            logger.warning(f"Validation Error: {ve}")
             return jsonify({"status": "error", "message": str(ve)}), 400
-        
+
         except Exception as e:
             # Handle other download errors
-            logger.error(f"Download Error: {str(e)}")
+            logger.error(f"Unexpected Error: {e}")
             return jsonify({"status": "error", "message": "Video download failed"}), 500
-    
-    # GET request renders the template
+
+    # For GET requests, render the HTML form
     return render_template("index.html")
 
 @app.route("/download/<path:filename>")
@@ -142,18 +103,16 @@ def download_file(filename):
     Serve the downloaded file
     """
     try:
-        return send_file(filename, as_attachment=True)
+        filepath = os.path.join(DOWNLOAD_DIR, filename)
+        return send_file(filepath, as_attachment=True)
     except Exception as e:
-        logger.error(f"File download error: {str(e)}")
+        logger.error(f"File download error: {e}")
         return jsonify({"status": "error", "message": "File not found"}), 404
 
 if __name__ == "__main__":
-    # Ensure tmp directory exists
-    os.makedirs('/tmp', exist_ok=True)
-    
-    # Run the app
+    # Run the Flask app
     app.run(
-        host='0.0.0.0', 
-        port=int(os.environ.get('PORT', 5000)),
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000)),
         debug=False
     )
