@@ -1,7 +1,7 @@
 import os
-import uuid
 import logging
-from flask import Flask, request, jsonify, send_file, render_template, abort
+import requests
+from flask import Flask, request, Response, render_template, abort
 from yt_dlp import YoutubeDL
 
 # Configure logging
@@ -10,53 +10,53 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Directory to store temporary downloads
-DOWNLOAD_DIR = os.path.join(os.getcwd(), "downloads")
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-
 # Path to cookies.txt file (if needed for authentication)
 COOKIES_FILE = os.path.join(os.getcwd(), "cookies.txt")
 
-def download_video(url):
+
+def fetch_video_info(url):
     """
-    Downloads a video from the given URL using yt_dlp and saves it locally.
+    Fetches video metadata and the direct streaming URL using yt_dlp.
     """
     try:
-        # Generate a unique filename
-        unique_id = str(uuid.uuid4())
-        filename_template = os.path.join(DOWNLOAD_DIR, f"{unique_id}.%(ext)s")
-
-        # yt_dlp options
         ydl_opts = {
-            "outtmpl": filename_template,
-            "format": "bestvideo+bestaudio/best",  # Best quality video and audio
-            "merge_output_format": "mp4",
+            "format": "bestvideo+bestaudio/best",
             "cookiefile": COOKIES_FILE if os.path.exists(COOKIES_FILE) else None,
             "quiet": True,
+            "noplaylist": True,  # Only process a single video
         }
 
-        # Download the video
         with YoutubeDL(ydl_opts) as ydl:
-            logger.info(f"Downloading video from URL: {url}")
-            info = ydl.extract_info(url, download=True)
-            downloaded_file = ydl.prepare_filename(info).replace(".webm", ".mp4")
-
-        # Ensure the file exists
-        if not os.path.exists(downloaded_file):
-            raise FileNotFoundError("The video file was not downloaded successfully.")
-
-        return {
-            "title": info.get("title", "Unknown Title"),
-            "filepath": downloaded_file,
-        }
+            logger.info(f"Fetching video info for URL: {url}")
+            info = ydl.extract_info(url, download=False)
+            return {
+                "url": info["url"],
+                "title": info.get("title", "video"),
+                "ext": info.get("ext", "mp4"),
+            }
     except Exception as e:
-        logger.error(f"Error downloading video: {e}")
-        raise ValueError("Video download failed. Please check the URL or try again later.")
+        logger.error(f"Failed to fetch video info: {e}")
+        raise ValueError("Failed to fetch video details. Ensure the URL is correct.")
+
+
+def stream_video_content(video_url):
+    """
+    Streams video content from the direct URL to the client.
+    """
+    try:
+        with requests.get(video_url, stream=True) as r:
+            r.raise_for_status()
+            for chunk in r.iter_content(chunk_size=8192):
+                yield chunk
+    except Exception as e:
+        logger.error(f"Error streaming video content: {e}")
+        raise ValueError("Failed to stream video content.")
+
 
 @app.route("/", methods=["GET", "POST"])
 def index():
     """
-    Main route for handling video download requests.
+    Main route for handling video streaming requests.
     """
     if request.method == "POST":
         try:
@@ -65,15 +65,17 @@ def index():
             if not video_url:
                 abort(400, description="No URL provided.")
 
-            # Download the video
-            video_info = download_video(video_url)
+            # Fetch video info
+            video_info = fetch_video_info(video_url)
 
-            # Return the file as a response
-            filepath = video_info["filepath"]
-            if os.path.exists(filepath):
-                return send_file(filepath, as_attachment=True, download_name=os.path.basename(filepath))
-            else:
-                abort(404, description="Downloaded file not found.")
+            # Stream the video
+            return Response(
+                stream_video_content(video_info["url"]),
+                content_type=f"video/{video_info['ext']}",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{video_info["title"]}.{video_info["ext"]}"'
+                },
+            )
         except ValueError as ve:
             logger.warning(f"Validation error: {ve}")
             abort(400, description=str(ve))
@@ -82,13 +84,16 @@ def index():
             abort(500, description="Internal server error.")
     return render_template("index.html")
 
+
 @app.errorhandler(400)
 def bad_request_error(error):
     return render_template("index.html", error=str(error)), 400
 
+
 @app.errorhandler(500)
 def internal_server_error(error):
     return render_template("index.html", error="Internal server error. Please try again later."), 500
+
 
 if __name__ == "__main__":
     app.run(
