@@ -1,8 +1,9 @@
 import os
 import uuid
 import logging
-from flask import Flask, request, jsonify, send_file, abort
+from flask import Flask, request, jsonify, send_file, abort, render_template
 from yt_dlp import YoutubeDL
+import validators
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -14,7 +15,7 @@ app = Flask(__name__)
 DOWNLOAD_DIR = os.path.join(os.getcwd(), "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# Path to cookies.txt file (if needed for authentication)
+# Path to cookies.txt file (optional for authenticated downloads)
 COOKIES_FILE = os.path.join(os.getcwd(), "cookies.txt")
 
 def download_video(url):
@@ -22,6 +23,10 @@ def download_video(url):
     Downloads a video from the given URL using yt_dlp and saves it locally.
     """
     try:
+        # Validate the URL
+        if not validators.url(url):
+            raise ValueError("Invalid URL provided.")
+
         # Generate a unique filename
         unique_id = str(uuid.uuid4())
         filename_template = os.path.join(DOWNLOAD_DIR, f"{unique_id}.%(ext)s")
@@ -70,6 +75,18 @@ def index():
 
             # Return the file as a response
             filepath = video_info["filepath"]
+
+            # Ensure the file is removed after the response
+            from flask import after_this_request
+            @after_this_request
+            def remove_file(response):
+                try:
+                    os.remove(filepath)
+                    logger.info(f"Deleted temporary file: {filepath}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete file {filepath}: {e}")
+                return response
+
             if os.path.exists(filepath):
                 return send_file(filepath, as_attachment=True, download_name=os.path.basename(filepath))
             else:
@@ -81,6 +98,14 @@ def index():
             logger.error(f"Unexpected error: {e}")
             abort(500, description="Internal server error.")
     return render_template("index.html")
+
+@app.errorhandler(400)
+def bad_request(e):
+    return jsonify(error=str(e)), 400
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    return jsonify(error="An unexpected error occurred. Please try again later."), 500
 
 if __name__ == "__main__":
     app.run(
