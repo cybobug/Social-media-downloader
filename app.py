@@ -1,103 +1,110 @@
-import os
+from flask import Flask, request, render_template, Response, abort
+from yt_dlp import YoutubeDL
 import logging
 import requests
-from flask import Flask, request, Response, render_template, abort
-from yt_dlp import YoutubeDL
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
-
+# Initialize Flask app
 app = Flask(__name__)
 
-# Path to cookies.txt file (if needed for authentication)
-COOKIES_FILE = os.path.join(os.getcwd(), "cookies.txt")
-
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def fetch_video_info(url):
     """
-    Fetches video metadata and the direct streaming URL using yt_dlp.
+    Extracts video metadata and streaming URL using yt_dlp.
     """
     try:
         ydl_opts = {
-            "format": "bestvideo+bestaudio/best",
-            "cookiefile": COOKIES_FILE if os.path.exists(COOKIES_FILE) else None,
             "quiet": True,
-            "noplaylist": True,  # Only process a single video
+            "noplaylist": True,
+            "format": "bestvideo+bestaudio/best",
         }
-
+        if "youtube.com/shorts/" in url:
+            url = url.replace("youtube.com/shorts/", "youtube.com/watch?v=")
         with YoutubeDL(ydl_opts) as ydl:
-            logger.info(f"Fetching video info for URL: {url}")
             info = ydl.extract_info(url, download=False)
+            logger.info(f"Video info fetched: {info}")
+
+            # Extract the video URL
+            video_url = info.get("url") or (
+                info.get("formats")[-1]["url"] if "formats" in info else None
+            )
+            if not video_url:
+                raise ValueError("Unable to retrieve video URL from yt_dlp response.")
+
             return {
-                "url": info["url"],
-                "title": info.get("title", "video"),
+                "url": video_url,
+                "title": info.get("title", "video").replace(" ", "_"),
                 "ext": info.get("ext", "mp4"),
+                "filesize": info.get("filesize", 0),
             }
     except Exception as e:
         logger.error(f"Failed to fetch video info: {e}")
-        raise ValueError("Failed to fetch video details. Ensure the URL is correct.")
-
+        raise ValueError("Invalid URL or unsupported platform.")
 
 def stream_video_content(video_url):
     """
     Streams video content from the direct URL to the client.
+    Implements retries for robust downloading.
     """
+    session = requests.Session()
+    retries = Retry(total=5, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+    session.mount("http://", HTTPAdapter(max_retries=retries))
+    session.mount("https://", HTTPAdapter(max_retries=retries))
+
     try:
-        with requests.get(video_url, stream=True) as r:
+        with session.get(video_url, stream=True, timeout=60) as r:
             r.raise_for_status()
-            for chunk in r.iter_content(chunk_size=8192):
+            for chunk in r.iter_content(chunk_size=128 * 1024):  # 128 KB chunks
                 yield chunk
     except Exception as e:
-        logger.error(f"Error streaming video content: {e}")
+        logger.error(f"Error streaming video: {e}")
         raise ValueError("Failed to stream video content.")
-
 
 @app.route("/", methods=["GET", "POST"])
 def index():
     """
-    Main route for handling video streaming requests.
+    Main route to handle video download requests.
     """
     if request.method == "POST":
+        video_url = request.form.get("media-url")
+        if not video_url:
+            abort(400, "No URL provided.")
         try:
-            # Retrieve the video URL from the form
-            video_url = request.form.get("media-url")
-            if not video_url:
-                abort(400, description="No URL provided.")
-
-            # Fetch video info
             video_info = fetch_video_info(video_url)
+            logger.info(f"Resolved video URL: {video_info['url']}")
 
-            # Stream the video
+            # Prepare headers for the response
+            headers = {
+                "Content-Disposition": f'attachment; filename="{video_info["title"]}.{video_info["ext"]}"',
+            }
+            if video_info["filesize"]:
+                headers["Content-Length"] = str(video_info["filesize"])
+
+            # Stream video content directly to user
             return Response(
                 stream_video_content(video_info["url"]),
                 content_type=f"video/{video_info['ext']}",
-                headers={
-                    "Content-Disposition": f'attachment; filename="{video_info["title"]}.{video_info["ext"]}"'
-                },
+                headers=headers,
             )
         except ValueError as ve:
-            logger.warning(f"Validation error: {ve}")
-            abort(400, description=str(ve))
+            return render_template("index.html", error=str(ve)), 400
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
-            abort(500, description="Internal server error.")
-    return render_template("index.html")
+            return render_template("index.html", error="An internal error occurred."), 500
 
+    return render_template("index.html", error=None)
 
 @app.errorhandler(400)
 def bad_request_error(error):
     return render_template("index.html", error=str(error)), 400
 
-
 @app.errorhandler(500)
 def internal_server_error(error):
     return render_template("index.html", error="Internal server error. Please try again later."), 500
 
-
 if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", 5000)),
-        debug=False,
-    )
+    app.run(host="0.0.0.0", port=5000, debug=False)
