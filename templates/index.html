@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Download photos and videos from popular platforms like Instagram, Facebook, TikTok, and more. No ads, no watermarks, no registration required.">
   <meta name="keywords" content="video downloader, photo downloader, Instagram downloader, Facebook downloader, TikTok downloader, HD downloads">
-  <meta name="author" content="Your Website Name">
-  <title>All Video Downloader - HD Photos & Videos</title>
+  <meta name="author" content="MediaVault">
+  <title>MediaVault - Download HD Photos & Videos</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
@@ -37,11 +37,13 @@
         Paste the URL of the post or media and press download. No ads, no watermarks.
         <span class="info" title="More info about supported platforms">ℹ</span>
       </p>
+      <!-- Form to input media URL -->
       <form class="input-container" action="/" method="post">
         <label for="url-input" class="visually-hidden">Media URL</label>
-        <input id="url-input" type="url" name="media-url" placeholder="https://" class="url-input" required>
+        <input id="url-input" type="url" name="media-url" placeholder="https://example.com" class="url-input" required>
         <button type="submit" class="download-button">Download</button>
       </form>
+      <!-- Footer Section -->
       <footer class="footer">
         <p>No ads. No watermarks. No registration.</p>
         <p>But you can always <a href="#" class="buy-coffee">buy us a coffee ☕</a></p>
@@ -50,18 +52,32 @@
     </section>
   </main>
 
+  <!-- JavaScript -->
   <script>
     // Select all navigation links
     const navLinks = document.querySelectorAll('.nav a');
     const containerHeading = document.querySelector('.container h1');
+    const urlInput = document.getElementById('url-input');
 
-    // Add click event listener to each link
+    // Auto-fill example URLs for each platform
+    const platformExamples = {
+      Youtube: "https://www.youtube.com/watch?v=example",
+      Instagram: "https://www.instagram.com/p/example/",
+      Facebook: "https://www.facebook.com/example/videos/example/",
+      Pinterest: "https://www.pinterest.com/pin/example/",
+      Twitter: "https://twitter.com/example/status/example",
+      TikTok: "https://www.tiktok.com/@example/video/example",
+      Reddit: "https://www.reddit.com/r/example/comments/example/",
+      LinkedIn: "https://www.linkedin.com/posts/example/"
+    };
+
+    // Add click event listener to each navigation link
     navLinks.forEach(link => {
       link.addEventListener('click', event => {
         event.preventDefault(); // Prevent default behavior (page reload)
-        
-        const selectedText = link.textContent.trim(); // Get the clicked link's text
-        containerHeading.textContent = `Download Photos & Videos From ${selectedText}`; // Update heading text
+        const selectedPlatform = link.textContent.trim();
+        containerHeading.textContent = `Download Photos & Videos From ${selectedPlatform}`;
+        urlInput.value = platformExamples[selectedPlatform] || '';
       });
     });
   </script>
