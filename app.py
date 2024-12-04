@@ -27,6 +27,7 @@ def fetch_video_info(url):
             "quiet": True,
             "noplaylist": True,
             "format": "bestvideo+bestaudio/best",
+            "no_warnings": True,
         }
 
         # Use cookies.txt if available
@@ -41,7 +42,7 @@ def fetch_video_info(url):
             url = url.replace("youtube.com/shorts/", "youtube.com/watch?v=")
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            logger.info(f"Video info fetched: {info}")
+            logger.info(f"Video info fetched successfully.")
 
             # Extract the video URL
             video_url = info.get("url") or (
