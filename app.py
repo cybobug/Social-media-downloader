@@ -13,22 +13,30 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Path to cookies.txt (manually exported)
+COOKIES_PATH = "cookies.txt"
+
 def fetch_video_info(url):
     """
     Extracts video metadata and streaming URL using yt_dlp with cookies.
+    Supports both cookies.txt and --cookies-from-browser.
     """
     try:
-        # Check if cookies file exists
-        cookies_path = "cookies.txt"
-        if not os.path.exists(cookies_path):
-            logger.warning("cookies.txt not found. Restricted videos may fail.")
-
+        # yt-dlp options
         ydl_opts = {
             "quiet": True,
             "noplaylist": True,
             "format": "bestvideo+bestaudio/best",
-            "cookies": cookies_path if os.path.exists(cookies_path) else None,  # Use cookies if available
         }
+
+        # Use cookies.txt if available
+        if os.path.exists(COOKIES_PATH):
+            logger.info("Using cookies.txt for authentication.")
+            ydl_opts["cookies"] = COOKIES_PATH
+        else:
+            logger.warning("cookies.txt not found. Falling back to --cookies-from-browser.")
+            ydl_opts["cookiesfrombrowser"] = "chrome"  # Change to "firefox" or "edge" if needed.
+
         if "youtube.com/shorts/" in url:
             url = url.replace("youtube.com/shorts/", "youtube.com/watch?v=")
         with YoutubeDL(ydl_opts) as ydl:
@@ -94,7 +102,7 @@ def index():
             # Stream video content directly to user
             return Response(
                 stream_video_content(video_info["url"]),
-                content_type=f"video/{video_info["ext"]}",
+                content_type=f"video/{video_info['ext']}",
                 headers=headers,
             )
         except ValueError as ve:
