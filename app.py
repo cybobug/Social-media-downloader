@@ -4,6 +4,7 @@ import logging
 import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
+import os
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -14,13 +15,19 @@ logger = logging.getLogger(__name__)
 
 def fetch_video_info(url):
     """
-    Extracts video metadata and streaming URL using yt_dlp.
+    Extracts video metadata and streaming URL using yt_dlp with cookies.
     """
     try:
+        # Check if cookies file exists
+        cookies_path = "cookies.txt"
+        if not os.path.exists(cookies_path):
+            logger.warning("cookies.txt not found. Restricted videos may fail.")
+
         ydl_opts = {
             "quiet": True,
             "noplaylist": True,
             "format": "bestvideo+bestaudio/best",
+            "cookies": cookies_path if os.path.exists(cookies_path) else None,  # Use cookies if available
         }
         if "youtube.com/shorts/" in url:
             url = url.replace("youtube.com/shorts/", "youtube.com/watch?v=")
@@ -87,7 +94,7 @@ def index():
             # Stream video content directly to user
             return Response(
                 stream_video_content(video_info["url"]),
-                content_type=f"video/{video_info['ext']}",
+                content_type=f"video/{video_info["ext"]}",
                 headers=headers,
             )
         except ValueError as ve:
@@ -100,18 +107,11 @@ def index():
 
 @app.errorhandler(400)
 def bad_request_error(error):
-    """
-    Handles 400 Bad Request errors.
-    """
     return render_template("index.html", error=str(error)), 400
 
 @app.errorhandler(500)
 def internal_server_error(error):
-    """
-    Handles 500 Internal Server errors.
-    """
     return render_template("index.html", error="Internal server error. Please try again later."), 500
 
 if __name__ == "__main__":
-    # Use Gunicorn or another WSGI server for production with appropriate timeout settings.
     app.run(host="0.0.0.0", port=5000, debug=False)
