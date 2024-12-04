@@ -100,11 +100,18 @@ def index():
 
 @app.errorhandler(400)
 def bad_request_error(error):
+    """
+    Handles 400 Bad Request errors.
+    """
     return render_template("index.html", error=str(error)), 400
 
 @app.errorhandler(500)
 def internal_server_error(error):
+    """
+    Handles 500 Internal Server errors.
+    """
     return render_template("index.html", error="Internal server error. Please try again later."), 500
 
 if __name__ == "__main__":
+    # Use Gunicorn or another WSGI server for production with appropriate timeout settings.
     app.run(host="0.0.0.0", port=5000, debug=False)
